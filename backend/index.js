@@ -44,13 +44,15 @@ app.post('/api/process', upload.single('document'), (req, res) => {
     try {
       const result = JSON.parse(pythonOut.trim());
       
+      const baseUrl = process.env.RENDER_EXTERNAL_URL || `${req.protocol}://${req.get('host')}`;
+      
       const processedPages = (result.pages || []).map(page => {
         return {
           img_w: page.img_w,
           img_h: page.img_h,
           stamps: page.stamps,
-          original_url: page.original_image ? `http://localhost:5000/uploads/${path.basename(page.original_image)}` : null,
-          annotated_url: page.output_image ? `http://localhost:5000/uploads/${path.basename(page.output_image)}` : null
+          original_url: page.original_image ? `${baseUrl}/uploads/${path.basename(page.original_image)}` : null,
+          annotated_url: page.output_image ? `${baseUrl}/uploads/${path.basename(page.output_image)}` : null
         };
       });
 

@@ -145,8 +145,10 @@ export default function SummarizePage() {
     const formData = new FormData();
     formData.append('document', file);
 
+    const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+
     try {
-      const res = await fetch('http://localhost:5000/api/summarize', { method: 'POST', body: formData });
+      const res = await fetch(`${API_URL}/api/summarize`, { method: 'POST', body: formData });
       clearInterval(bar); clearInterval(stepInterval);
       setProgress(100); setStep(steps.length - 1);
 
@@ -158,7 +160,7 @@ export default function SummarizePage() {
     } catch {
       clearInterval(bar); clearInterval(stepInterval);
       setStatus('error');
-      setErrorMsg('Không kết nối được server backend (http://localhost:5000)');
+      setErrorMsg(`Không kết nối được server backend (${API_URL})`);
     }
   };
 
