@@ -1,0 +1,119 @@
+import sys
+import json
+import cv2
+import os
+import contextlib
+import io
+import fitz # PyMuPDF
+import numpy as np
+from ultralytics import YOLO
+
+MODEL_PATH = r"c:\Users\LAPTOP T&T\Desktop\AI_Science\ai\models\stamp_model\weights\best.pt"
+
+def extract_pages_as_images(img_path):
+    """Trả về mảng các ảnh RGB từ file (hỗ trợ nhiều trang PDF)"""
+    images = []
+    if img_path.lower().endswith('.pdf'):
+        doc = fitz.open(img_path)
+        for page_num in range(len(doc)):
+            page = doc.load_page(page_num)
+            pix = page.get_pixmap(dpi=150)
+            
+            # Load pixmap directly to numpy array for cv2
+            img = np.frombuffer(pix.samples, dtype=np.uint8).reshape(pix.h, pix.w, pix.n)
+            if pix.n == 4: # RGBA
+                img = cv2.cvtColor(img, cv2.COLOR_RGBA2BGR)
+            else:
+                img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
+            images.append(img)
+    else:
+        # Nếu là ảnh bình thường
+        images.append(cv2.imread(img_path))
+    return images
+
+def detect_and_draw(img_path):
+    images = extract_pages_as_images(img_path)
+    
+    if not images or any(img is None for img in images):
+        print(json.dumps({"error": f"Cannot read file: {img_path}"}))
+        return
+
+    pages_result = []
+    total_conf = 0
+    total_stamps = 0
+    
+    has_model = os.path.exists(MODEL_PATH)
+    model = None
+    if has_model:
+        # Mute logging once
+        with contextlib.redirect_stdout(io.StringIO()):
+            model = YOLO(MODEL_PATH)
+
+    for idx, img in enumerate(images):
+        orig_path = f"{img_path}_orig_p{idx}.jpg"
+        out_path = f"{img_path}_annot_p{idx}.jpg"
+        cv2.imwrite(orig_path, img)
+
+        stamps = []
+        if not has_model:
+            # Mock cho mỗi trang
+            h, w = img.shape[:2]
+            cx, cy, bw, bh = w//2, h//2, min(w,h)//4, min(w,h)//4
+            x1, y1 = cx - bw//2, cy - bh//2
+            
+            cv2.rectangle(img, (x1, y1), (x1+bw, y1+bh), (0, 0, 255), 3) 
+            cv2.putText(img, "Stamp Mock", (x1, max(y1-10, 0)), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0,0,255), 2)
+            
+            stamps.append({"x": x1, "y": y1, "w": bw, "h": bh, "confidence": 98.5})
+            total_stamps += 1
+            total_conf += 98.5
+        else:
+            with contextlib.redirect_stdout(io.StringIO()):
+                results = model.predict(source=img, conf=0.5, save=False, verbose=False)
+            
+            for r in results:
+                for box in r.boxes:
+                    x1, y1, x2, y2 = box.xyxy[0].tolist()
+                    conf = float(box.conf[0])
+                    total_conf += conf
+                    total_stamps += 1
+                    
+                    stamps.append({
+                        "x": int(x1), "y": int(y1), 
+                        "w": int(x2-x1), "h": int(y2-y1),
+                        "confidence": round(conf*100, 2)
+                    })
+                    
+                    cv2.rectangle(img, (int(x1), int(y1)), (int(x2), int(y2)), (0, 0, 255), 3)
+                    cv2.putText(img, f"Stamp {conf:.2f}", (int(x1), max(int(y1)-10, 0)), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0,0,255), 2)
+                    
+        cv2.imwrite(out_path, img)
+
+        img_h, img_w = img.shape[:2]
+
+        pages_result.append({
+            "original_image": orig_path,
+            "output_image": out_path,
+            "img_w": int(img_w),
+            "img_h": int(img_h),
+            "stamps": stamps
+        })
+
+    avg_conf = round((total_conf / total_stamps * 100) if total_stamps else 0, 2)
+    
+    print(json.dumps({
+        "pages": pages_result,
+        "confidence_avg": avg_conf
+    }))
+
+if __name__ == "__main__":
+    if len(sys.argv) < 2:
+        print(json.dumps({"error": "No image path provided"}))
+        sys.exit(1)
+        
+    img_path = sys.argv[1]
+    
+    try:
+        detect_and_draw(img_path)
+    except Exception as e:
+        print(json.dumps({"error": str(e)}))
