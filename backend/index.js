@@ -42,7 +42,13 @@ app.post('/api/process', upload.single('document'), (req, res) => {
 
   pythonProcess.on('close', (code) => {
     try {
-      const result = JSON.parse(pythonOut.trim());
+      let cleanOut = pythonOut.trim();
+      const firstBrace = cleanOut.indexOf('{');
+      const lastBrace = cleanOut.lastIndexOf('}');
+      if (firstBrace !== -1 && lastBrace !== -1) {
+        cleanOut = cleanOut.substring(firstBrace, lastBrace + 1);
+      }
+      const result = JSON.parse(cleanOut);
       
       const baseUrl = process.env.RENDER_EXTERNAL_URL || `${req.protocol}://${req.get('host')}`;
       
@@ -85,7 +91,13 @@ app.post('/api/summarize', upload.single('document'), (req, res) => {
   pythonProcess.on('close', () => {
     try { fs.unlinkSync(filePath); } catch {}
     try {
-      const result = JSON.parse(pythonOut.trim());
+      let cleanOut = pythonOut.trim();
+      const firstBrace = cleanOut.indexOf('{');
+      const lastBrace = cleanOut.lastIndexOf('}');
+      if (firstBrace !== -1 && lastBrace !== -1) {
+        cleanOut = cleanOut.substring(firstBrace, lastBrace + 1);
+      }
+      const result = JSON.parse(cleanOut);
       if (result.error) return res.status(500).json({ error: result.error });
       res.json(result);
     } catch (e) {
