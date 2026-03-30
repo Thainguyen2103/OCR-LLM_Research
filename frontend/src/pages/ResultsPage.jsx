@@ -139,7 +139,36 @@ function EntitySection({ icon: Icon, label, items, color }) {
 export default function ResultsPage() {
   const { id } = useParams();
   const [isHovering, setIsHovering] = useState(null);
-  const { meta, tldr, tom_tat, insights, entities, keywords, faqs } = MOCK;
+  
+  // Try to use real data first
+  const savedStr = localStorage.getItem('last_summary');
+  const realSum = savedStr ? JSON.parse(savedStr).summary : null;
+  
+  const displayData = realSum ? {
+    meta: {
+      loai: realSum.loai_van_ban || "Văn bản",
+      so_hieu: realSum.so_hieu || "Không rõ",
+      ngay: realSum.ngay_ban_hanh || "",
+      co_quan: realSum.co_quan_ban_hanh || "",
+      nguoi_ky: realSum.nguoi_ky || "",
+      linh_vuc: realSum.linh_vuc || "",
+      hieu_luc: realSum.thoi_han_hieu_luc || "",
+      muc_do: realSum.muc_do_quan_trong || ""
+    },
+    tldr: realSum.tom_tat_ngan || "",
+    tom_tat: realSum.tom_tat_day_du || "",
+    insights: (realSum.diem_chinh || []).map((p, i) => ({ title: `Nội dung ${i+1}`, body: p })),
+    entities: {
+      organizations: realSum.co_quan_ban_hanh ? [realSum.co_quan_ban_hanh] : [],
+      people: realSum.nguoi_ky ? [realSum.nguoi_ky] : [],
+      laws: realSum.van_ban_lien_quan || [],
+      dates: realSum.thoi_han_hieu_luc ? [realSum.thoi_han_hieu_luc] : []
+    },
+    keywords: realSum.tu_khoa || [],
+    faqs: (realSum.nghia_vu_va_quyen_han || []).map(o => ({ q: "Nghĩa vụ / Quyền hạn", a: o }))
+  } : MOCK;
+
+  const { meta, tldr, tom_tat, insights, entities, keywords, faqs } = displayData;
 
   const pages = JSON.parse(localStorage.getItem('last_processed_pages') || 'null') || [
     { original_url: 'https://images.unsplash.com/photo-1586281380349-632531db7ed4', annotated_url: null, stamps: [] }

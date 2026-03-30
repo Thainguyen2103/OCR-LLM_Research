@@ -93,76 +93,33 @@ function StepDot({ label, done }) {
 
 // ─── Main Page ─────────────────────────────────────────────────────────────
 
+import { useEffect } from 'react';
+
 export default function SummarizePage() {
-  const [status, setStatus] = useState('idle'); // idle | uploading | done | error
-  const [progress, setProgress] = useState(0);
-  const [step, setStep] = useState(0);
   const [result, setResult] = useState(null);
-  const [errorMsg, setErrorMsg] = useState('');
   const [showPreview, setShowPreview] = useState(false);
   const [fileName, setFileName] = useState('');
 
-  const steps = [
-    'Đọc nội dung tài liệu',
-    'Gửi tới Qwen2.5 (Ollama)',
-    'Phân tích ngữ nghĩa',
-    'Trích xuất thực thể',
-    'Hoàn tất'
-  ];
-
-  const onDrop = useCallback(files => {
-    if (files.length > 0) handleUpload(files[0]);
+  useEffect(() => {
+    const data = localStorage.getItem('last_summary');
+    if (data) {
+      try {
+        const parsed = JSON.parse(data);
+        setResult(parsed);
+        setFileName(parsed.fileName || 'Tài liệu tóm tắt');
+      } catch (e) {}
+    }
   }, []);
 
-  const { getRootProps, getInputProps, isDragActive } = useDropzone({
-    onDrop,
-    accept: {
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document': ['.docx'],
-      'text/plain': ['.txt']
-    },
-    multiple: false
-  });
-
-  const handleUpload = async (file) => {
-    setFileName(file.name);
-    setStatus('uploading');
-    setProgress(0);
-    setStep(0);
-    setResult(null);
-    setErrorMsg('');
-
-    // Animate step progress while waiting
-    const stepInterval = setInterval(() => {
-      setStep(prev => {
-        if (prev < steps.length - 1) return prev + 1;
-        clearInterval(stepInterval);
-        return prev;
-      });
-    }, 4000);
-
-    const bar = setInterval(() => setProgress(p => p < 88 ? p + 1 : p), 500);
-
-    const formData = new FormData();
-    formData.append('document', file);
-
-    const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
-
-    try {
-      const res = await fetch(`${API_URL}/api/summarize`, { method: 'POST', body: formData });
-      clearInterval(bar); clearInterval(stepInterval);
-      setProgress(100); setStep(steps.length - 1);
-
-      const data = await res.json();
-      if (data.error) { setStatus('error'); setErrorMsg(data.error); return; }
-
-      setResult(data);
-      setStatus('done');
-    } catch {
-      clearInterval(bar); clearInterval(stepInterval);
-      setStatus('error');
-      setErrorMsg(`Không kết nối được server backend (${API_URL})`);
-    }
-  };
+  if (!result) {
+    return (
+      <div style={{ textAlign: 'center', marginTop: 100 }}>
+        <h2 style={{ fontSize: 24, color: 'var(--text-secondary)' }}>Chưa có dữ liệu phân tích</h2>
+        <p style={{ color: 'var(--text-muted)', marginTop: 10 }}>Vui lòng tải lên tài liệu .docx từ trang chủ để xem kết quả.</p>
+        <button onClick={() => window.history.back()} style={{ marginTop: 20, padding: '10px 20px', background: 'var(--accent)', color: 'white', borderRadius: 8, border: 'none', cursor: 'pointer' }}>Quay lại Trang chủ</button>
+      </div>
+    );
+  }
 
   const s = result?.summary || {};
   const stats = result?.stats || {};
@@ -179,66 +136,8 @@ export default function SummarizePage() {
         </p>
       </header>
 
-      {/* Upload Zone */}
-      {status !== 'done' && (
-        <div
-          {...getRootProps()}
-          style={{
-            border: `2px dashed ${isDragActive ? 'var(--accent)' : 'var(--border-bright)'}`,
-            borderRadius: 'var(--radius)',
-            padding: '40px 32px',
-            background: isDragActive ? 'var(--accent-glow)' : 'var(--bg-card)',
-            textAlign: 'center',
-            cursor: status === 'uploading' ? 'wait' : 'pointer',
-            pointerEvents: status === 'uploading' ? 'none' : 'auto',
-            transition: 'all 0.2s ease',
-            marginBottom: 28
-          }}
-        >
-          <input {...getInputProps()} />
-
-          {status === 'uploading' ? (
-            <div style={{ maxWidth: 480, margin: '0 auto' }}>
-              <Loader2 size={36} color="var(--accent)" style={{ animation: 'spin 1s linear infinite', marginBottom: 16 }} />
-              <h3 style={{ fontSize: 17, fontWeight: 600, marginBottom: 20 }}>AI đang phân tích tài liệu…</h3>
-
-              {/* Steps */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10, textAlign: 'left', marginBottom: 20 }}>
-                {steps.map((s, i) => <StepDot key={i} label={s} done={i <= step} />)}
-              </div>
-
-              {/* Progress bar */}
-              <div style={{ width: '100%', height: 6, background: 'var(--border)', borderRadius: 3, overflow: 'hidden', marginBottom: 8 }}>
-                <div style={{
-                  height: '100%', width: `${progress}%`,
-                  background: 'linear-gradient(90deg, var(--accent), var(--accent-2))',
-                  transition: 'width 0.5s ease', borderRadius: 3
-                }} />
-              </div>
-              <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>Qwen2.5 đang đọc văn bản, có thể mất 30–60 giây…</p>
-            </div>
-          ) : (
-            <>
-              <Upload size={32} color="var(--accent)" style={{ marginBottom: 12 }} />
-              <h3 style={{ fontSize: 16, fontWeight: 600, marginBottom: 6 }}>
-                {isDragActive ? 'Thả file vào đây…' : 'Kéo thả hoặc Click để chọn'}
-              </h3>
-              <p style={{ color: 'var(--text-muted)', fontSize: 13 }}>Hỗ trợ .docx, .txt</p>
-            </>
-          )}
-
-          {status === 'error' && (
-            <div style={{ marginTop: 20, display: 'flex', alignItems: 'center', gap: 8, color: 'var(--accent-error)', justifyContent: 'center', fontSize: 14 }}>
-              <AlertCircle size={16} />
-              <span>{errorMsg}</span>
-            </div>
-          )}
-        </div>
-      )}
-
       {/* Results */}
-      {status === 'done' && result && (
-        <div style={{ animation: 'fadeIn 0.4s ease' }}>
+      <div style={{ animation: 'fadeIn 0.4s ease' }}>
           {/* Doc Identity Bar */}
           <div style={{
             background: 'var(--bg-card)', border: '1px solid var(--border)',
@@ -264,7 +163,7 @@ export default function SummarizePage() {
               {s.muc_do_quan_trong && <ImportanceBadge level={s.muc_do_quan_trong} />}
               {s.linh_vuc && <span style={{ background: 'var(--accent-glow)', color: 'var(--accent)', border: '1px solid rgba(30,103,146,0.2)', padding: '4px 14px', borderRadius: 20, fontSize: 12, fontWeight: 600 }}>{s.linh_vuc}</span>}
               <button
-                onClick={() => { setStatus('idle'); setResult(null); }}
+                onClick={() => window.location.href = '/'}
                 style={{ background: 'var(--bg-hover)', border: '1px solid var(--border-bright)', borderRadius: 8, padding: '6px 14px', cursor: 'pointer', fontSize: 13, color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 6 }}
               >
                 <Upload size={13} /> Tải lên lại
@@ -386,7 +285,6 @@ export default function SummarizePage() {
             </div>
           </div>
         </div>
-      )}
     </div>
   );
 }

@@ -11,7 +11,7 @@ except ImportError:
     HAS_DOCX = False
 
 OLLAMA_URL = "http://localhost:11434/api/generate"
-MODEL_NAME = "qwen2.5:7b"
+MODEL_NAME = "qwen2.5:1.5b"
 
 def extract_text_from_docx(file_path):
     if not HAS_DOCX:
@@ -69,6 +69,7 @@ VĂN BẢN CẦN PHÂN TÍCH:
             "model": MODEL_NAME,
             "prompt": prompt,
             "stream": False,
+            "format": "json",
             "options": {
                 "temperature": 0.1,
                 "num_predict": 1500
@@ -137,7 +138,7 @@ def main():
             "char_count": char_count,
             "preview_text": text[:800]
         }
-    }, ensure_ascii=False))
+    }))
 
 if __name__ == "__main__":
     main()

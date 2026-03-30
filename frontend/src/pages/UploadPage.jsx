@@ -19,26 +19,33 @@ export default function UploadPage() {
     onDrop,
     accept: {
       'image/*': ['.png', '.jpg', '.jpeg'],
-      'application/pdf': ['.pdf']
+      'application/pdf': ['.pdf'],
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document': ['.docx'],
+      'text/plain': ['.txt']
     },
     multiple: false
   });
 
+  const [fileType, setFileType] = useState('image'); // 'image' | 'doc'
+
   const handleUpload = async (file) => {
+    const isDoc = file.name.endsWith('.docx') || file.name.endsWith('.txt');
+    setFileType(isDoc ? 'doc' : 'image');
     setIsUploading(true);
     setProgress(0);
     
     // Simulate progress while waiting for backend
     const progressInterval = setInterval(() => {
-      setProgress(prev => (prev < 90 ? prev + 2 : prev));
-    }, 100);
+      setProgress(prev => (prev < 90 ? prev + (isDoc ? 1 : 2) : prev));
+    }, isDoc ? 400 : 100);
     
     const formData = new FormData();
     formData.append('document', file);
     
     try {
       const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
-      const response = await fetch(`${API_URL}/api/process`, {
+      const endpoint = isDoc ? '/api/summarize' : '/api/process';
+      const response = await fetch(`${API_URL}${endpoint}`, {
         method: 'POST',
         body: formData
       });
@@ -47,15 +54,21 @@ export default function UploadPage() {
       clearInterval(progressInterval);
       setProgress(100);
       
-      if (data.success) {
-        localStorage.setItem('last_processed_pages', JSON.stringify(data.pages));
-        
-        setTimeout(() => {
-          const mockId = Math.random().toString(36).substring(7);
-          navigate(`/results/${mockId}`);
-        }, 500);
+      if (data.success || data.summary) {
+        if (isDoc) {
+          localStorage.setItem('last_summary', JSON.stringify({...data, fileName: file.name}));
+          setTimeout(() => navigate('/summarize'), 500);
+        } else {
+          localStorage.setItem('last_processed_pages', JSON.stringify(data.pages || []));
+          if (data.summary) {
+            localStorage.setItem('last_summary', JSON.stringify(data));
+          } else {
+            localStorage.removeItem('last_summary');
+          }
+          setTimeout(() => navigate(`/results/${Math.random().toString(36).substring(7)}`), 500);
+        }
       } else {
-        alert("Lỗi AI: " + data.error);
+        alert("Lỗi AI: " + (data.error || 'Unknown error'));
         setIsUploading(false);
       }
     } catch (e) {
@@ -97,7 +110,7 @@ export default function UploadPage() {
                }}></div>
              </div>
              <p style={{marginTop:'12px', color:'var(--text-muted)', fontSize:'14px'}}>
-               Đang chạy mô hình YOLOv8 để tìm vị trí con dấu đỏ
+               {fileType === 'doc' ? 'AI Qwen2.5 đang đọc nội dung, có thể mất 30-60 giây...' : 'Đang chạy mô hình YOLOv8 để tìm vị trí con dấu đỏ'}
              </p>
           </div>
         ) : (
@@ -113,35 +126,14 @@ export default function UploadPage() {
               <span className="badge badge-blue">PDF</span>
               <span className="badge badge-green">PNG</span>
               <span className="badge badge-yellow">JPG</span>
+              <span style={{background: '#ede9fe', color: '#7c3aed', padding: '4px 10px', borderRadius: '12px', fontSize: '11px', fontWeight: '700'}}>DOCX</span>
+              <span style={{background: '#f3f4f6', color: '#4b5563', padding: '4px 10px', borderRadius: '12px', fontSize: '11px', fontWeight: '700'}}>TXT</span>
             </div>
           </>
         )}
       </div>
 
-      <div style={{marginTop: '40px'}}>
-        <h3 style={{fontSize: '16px', marginBottom: '16px', color: 'var(--text-secondary)'}}>
-          Văn bản xử lý gần đây
-        </h3>
-        <div className="documents-grid">
-          {/* Mock Recent Files */}
-          {[1, 2, 3].map(i => (
-            <div key={i} className="document-card" onClick={() => navigate(`/results/mock-${i}`)}>
-              <div className="doc-card-header">
-                <div className="doc-icon">
-                  <File size={20} color="var(--accent)" />
-                </div>
-                <div>
-                  <div className="doc-name">Quyet_dinh_bo_nhiem_can_bo_2025.pdf</div>
-                  <div className="doc-meta" style={{marginTop:'4px', display:'flex', alignItems:'center', gap:'6px'}}>
-                    <CheckCircle size={12} color="var(--accent-success)" />
-                    <span>Hoàn thành • 2 giờ trước</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
+
     </div>
   );
 }

@@ -15,27 +15,14 @@ export default function Sidebar() {
           <Upload size={18} className="nav-icon" />
           <span>Tải lên văn bản</span>
         </NavLink>
-        <NavLink to="/summarize" className={({isActive}) => `nav-item ${isActive ? 'active' : ''}`}>
-          <FileSearch size={18} className="nav-icon" />
-          <span>Tóm tắt văn bản</span>
-        </NavLink>
+
         <NavLink to="/history" className={({isActive}) => `nav-item ${isActive ? 'active' : ''}`}>
           <Clock size={18} className="nav-icon" />
           <span>Lịch sử xử lý</span>
         </NavLink>
       </nav>
 
-      <div className="sidebar-section-label">Hệ thống</div>
-      <nav className="sidebar-nav" style={{flex: 'unset', paddingBottom: '20px'}}>
-         <a href="#" className="nav-item">
-          <Settings size={18} className="nav-icon" />
-          <span>Cấu hình mô hình</span>
-        </a>
-        <a href="#" className="nav-item">
-          <HelpCircle size={18} className="nav-icon" />
-          <span>Hướng dẫn sử dụng</span>
-        </a>
-      </nav>
+
 
       <div className="sidebar-footer">
         <p className="sidebar-footer-text">

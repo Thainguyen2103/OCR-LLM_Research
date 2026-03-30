@@ -8,15 +8,17 @@ import fitz # PyMuPDF
 import numpy as np
 from ultralytics import YOLO
 
-MODEL_PATH = r"c:\Users\LAPTOP T&T\Desktop\AI_Science\ai\models\stamp_model\weights\best.pt"
-
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+MODEL_PATH = os.path.join(BASE_DIR, "models", "stamp_model", "weights", "best.pt")
 def extract_pages_as_images(img_path):
-    """Trả về mảng các ảnh RGB từ file (hỗ trợ nhiều trang PDF)"""
+    """Trả về (images_array, extracted_text)"""
     images = []
+    text = ""
     if img_path.lower().endswith('.pdf'):
         doc = fitz.open(img_path)
         for page_num in range(len(doc)):
             page = doc.load_page(page_num)
+            text += page.get_text() + "\n"
             pix = page.get_pixmap(dpi=150)
             
             # Load pixmap directly to numpy array for cv2
@@ -29,10 +31,10 @@ def extract_pages_as_images(img_path):
     else:
         # Nếu là ảnh bình thường
         images.append(cv2.imread(img_path))
-    return images
+    return images, text
 
 def detect_and_draw(img_path):
-    images = extract_pages_as_images(img_path)
+    images, extracted_text = extract_pages_as_images(img_path)
     
     if not images or any(img is None for img in images):
         print(json.dumps({"error": f"Cannot read file: {img_path}"}))
@@ -101,9 +103,20 @@ def detect_and_draw(img_path):
 
     avg_conf = round((total_conf / total_stamps * 100) if total_stamps else 0, 2)
     
+    summary_data = None
+    if extracted_text and len(extracted_text.strip()) > 30:
+        try:
+            from summarize import summarize_with_ollama
+            summary_res, err = summarize_with_ollama(extracted_text)
+            if not err:
+                summary_data = summary_res
+        except Exception:
+            pass
+
     print(json.dumps({
         "pages": pages_result,
-        "confidence_avg": avg_conf
+        "confidence_avg": avg_conf,
+        "summary": summary_data
     }))
 
 if __name__ == "__main__":
