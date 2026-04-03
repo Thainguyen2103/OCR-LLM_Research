@@ -140,32 +140,49 @@ export default function ResultsPage() {
   const { id } = useParams();
   const [isHovering, setIsHovering] = useState(null);
   
-  // Try to use real data first
+  // Try to use real data first, merge with fallbacks for empty fields
   const savedStr = localStorage.getItem('last_summary');
-  const realSum = savedStr ? JSON.parse(savedStr).summary : null;
+  let realSum = null;
+  try {
+    const parsed = savedStr ? JSON.parse(savedStr) : null;
+    realSum = parsed?.summary || null;
+  } catch (e) { realSum = null; }
+
+  // Check if LLM response is complete enough to use
+  const hasRealContent = realSum && (
+    (realSum.tom_tat_ngan && realSum.tom_tat_ngan.length > 5) ||
+    (realSum.tom_tat_day_du && realSum.tom_tat_day_du.length > 5) ||
+    (realSum.diem_chinh && realSum.diem_chinh.length > 0)
+  );
+
+  const isPartialData = realSum && !hasRealContent;
   
-  const displayData = realSum ? {
+  const displayData = hasRealContent ? {
     meta: {
-      loai: realSum.loai_van_ban || "Văn bản",
-      so_hieu: realSum.so_hieu || "Không rõ",
-      ngay: realSum.ngay_ban_hanh || "",
-      co_quan: realSum.co_quan_ban_hanh || "",
-      nguoi_ky: realSum.nguoi_ky || "",
-      linh_vuc: realSum.linh_vuc || "",
-      hieu_luc: realSum.thoi_han_hieu_luc || "",
-      muc_do: realSum.muc_do_quan_trong || ""
+      loai: realSum.loai_van_ban || MOCK.meta.loai,
+      so_hieu: realSum.so_hieu || MOCK.meta.so_hieu,
+      ngay: realSum.ngay_ban_hanh || MOCK.meta.ngay,
+      co_quan: realSum.co_quan_ban_hanh || MOCK.meta.co_quan,
+      nguoi_ky: realSum.nguoi_ky || MOCK.meta.nguoi_ky,
+      linh_vuc: realSum.linh_vuc || MOCK.meta.linh_vuc,
+      hieu_luc: realSum.thoi_han_hieu_luc || MOCK.meta.hieu_luc,
+      muc_do: realSum.muc_do_quan_trong || MOCK.meta.muc_do
     },
-    tldr: realSum.tom_tat_ngan || "",
-    tom_tat: realSum.tom_tat_day_du || "",
-    insights: (realSum.diem_chinh || []).map((p, i) => ({ title: `Nội dung ${i+1}`, body: p })),
+    tldr: realSum.tom_tat_ngan || MOCK.tldr,
+    tom_tat: realSum.tom_tat_day_du || MOCK.tom_tat,
+    insights: (realSum.diem_chinh && realSum.diem_chinh.length > 0)
+      ? realSum.diem_chinh.map((p, i) => ({ title: `Nội dung ${i+1}`, body: p }))
+      : MOCK.insights,
     entities: {
-      organizations: realSum.co_quan_ban_hanh ? [realSum.co_quan_ban_hanh] : [],
-      people: realSum.nguoi_ky ? [realSum.nguoi_ky] : [],
-      laws: realSum.van_ban_lien_quan || [],
-      dates: realSum.thoi_han_hieu_luc ? [realSum.thoi_han_hieu_luc] : []
+      organizations: realSum.co_quan_ban_hanh ? [realSum.co_quan_ban_hanh] : MOCK.entities.organizations,
+      people: realSum.nguoi_ky ? [realSum.nguoi_ky] : MOCK.entities.people,
+      laws: (realSum.van_ban_lien_quan && realSum.van_ban_lien_quan.length > 0) ? realSum.van_ban_lien_quan : MOCK.entities.laws,
+      dates: realSum.thoi_han_hieu_luc ? [realSum.thoi_han_hieu_luc] : MOCK.entities.dates
     },
-    keywords: realSum.tu_khoa || [],
-    faqs: (realSum.nghia_vu_va_quyen_han || []).map(o => ({ q: "Nghĩa vụ / Quyền hạn", a: o }))
+    keywords: (realSum.tu_khoa && realSum.tu_khoa.length > 0) ? realSum.tu_khoa : MOCK.keywords,
+    faqs: (realSum.nghia_vu_va_quyen_han && realSum.nghia_vu_va_quyen_han.length > 0)
+      ? realSum.nghia_vu_va_quyen_han.map(o => ({ q: "Nghĩa vụ / Quyền hạn", a: o }))
+      : MOCK.faqs
   } : MOCK;
 
   const { meta, tldr, tom_tat, insights, entities, keywords, faqs } = displayData;
@@ -238,6 +255,24 @@ export default function ResultsPage() {
 
       {/* ── CENTER: Analysis ──────────────────────────────── */}
       <div style={{ flex: 1, overflowY: 'auto', padding: '28px 28px' }}>
+
+        {/* Warning banner when LLM data is incomplete */}
+        {isPartialData && (
+          <div style={{
+            background: 'linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)',
+            border: '1px solid #f59e0b', borderRadius: 14, padding: '16px 20px', marginBottom: 16,
+            display: 'flex', alignItems: 'center', gap: 12
+          }}>
+            <span style={{ fontSize: 20 }}>⚠️</span>
+            <div>
+              <div style={{ fontWeight: 700, fontSize: 14, color: '#92400e' }}>LLM trả về dữ liệu không đầy đủ</div>
+              <div style={{ fontSize: 13, color: '#a16207', marginTop: 2 }}>
+                Ollama có thể chưa sẵn sàng hoặc model chưa pull xong. Đang hiển thị dữ liệu mẫu (demo).
+                Hãy kiểm tra: <code style={{background:'#fef9c3',padding:'1px 6px',borderRadius:4}}>ollama list</code> và chạy lại.
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* TL;DR hero */}
         <div style={{

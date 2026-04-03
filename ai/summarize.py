@@ -1,6 +1,7 @@
 import sys
 import json
 import re
+import time
 import requests
 import os
 
@@ -10,8 +11,15 @@ try:
 except ImportError:
     HAS_DOCX = False
 
-OLLAMA_URL = "http://localhost:11434/api/generate"
-MODEL_NAME = "qwen2.5:1.5b"
+# ═══════════════════════════════════════════════════════════════════════════
+# Configuration — Có thể override bằng environment variables
+# ═══════════════════════════════════════════════════════════════════════════
+OLLAMA_URL = os.environ.get("OLLAMA_URL", "http://localhost:11434/api/generate")
+MODEL_NAME = os.environ.get("OLLAMA_MODEL", "qwen2.5:7b")
+MAX_CHARS = int(os.environ.get("OLLAMA_MAX_CHARS", "32000"))
+NUM_PREDICT = int(os.environ.get("OLLAMA_NUM_PREDICT", "3000"))
+MAX_RETRIES = 3
+
 
 def extract_text_from_docx(file_path):
     if not HAS_DOCX:
@@ -21,14 +29,15 @@ def extract_text_from_docx(file_path):
     full_text = "\n".join(paragraphs)
     return full_text, None
 
+
 def extract_text_from_txt(file_path):
     with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
         return f.read(), None
 
+
 def summarize_with_ollama(text):
-    max_chars = 8000
-    if len(text) > max_chars:
-        text = text[:max_chars] + "\n[...văn bản bị cắt bớt do giới hạn ngữ cảnh...]"
+    if len(text) > MAX_CHARS:
+        text = text[:MAX_CHARS] + "\n[...văn bản bị cắt bớt do giới hạn ngữ cảnh...]"
 
     prompt = f"""Bạn là chuyên gia phân tích văn bản hành chính Việt Nam. Hãy phân tích toàn diện văn bản sau và trả về JSON với cấu trúc chính xác như dưới đây:
 
@@ -64,35 +73,59 @@ VĂN BẢN CẦN PHÂN TÍCH:
 {text}
 """
 
-    try:
-        response = requests.post(OLLAMA_URL, json={
-            "model": MODEL_NAME,
-            "prompt": prompt,
-            "stream": False,
-            "format": "json",
-            "options": {
-                "temperature": 0.1,
-                "num_predict": 1500
-            }
-        }, timeout=180)
+    # Retry logic
+    for attempt in range(MAX_RETRIES):
+        try:
+            response = requests.post(OLLAMA_URL, json={
+                "model": MODEL_NAME,
+                "prompt": prompt,
+                "stream": False,
+                "format": "json",
+                "options": {
+                    "temperature": 0.1,
+                    "num_predict": NUM_PREDICT
+                }
+            }, timeout=300)
 
-        if response.status_code != 200:
-            return None, f"Lỗi Ollama: HTTP {response.status_code}"
+            if response.status_code != 200:
+                if attempt < MAX_RETRIES - 1:
+                    time.sleep(2 ** attempt)
+                    continue
+                return None, f"Lỗi Ollama: HTTP {response.status_code}"
 
-        result_text = response.json().get("response", "")
-        json_match = re.search(r'\{[\s\S]*\}', result_text)
-        if json_match:
-            summary = json.loads(json_match.group())
-            return summary, None
-        else:
+            result_text = response.json().get("response", "")
+
+            # Validate JSON response
+            json_match = re.search(r'\{[\s\S]*\}', result_text)
+            if json_match:
+                try:
+                    summary = json.loads(json_match.group())
+                    return summary, None
+                except json.JSONDecodeError:
+                    if attempt < MAX_RETRIES - 1:
+                        time.sleep(2 ** attempt)
+                        continue
+                    return {"tom_tat_ngan": result_text.strip()}, None
+            else:
+                return {"tom_tat_ngan": result_text.strip()}, None
+
+        except requests.exceptions.ConnectionError:
+            if attempt < MAX_RETRIES - 1:
+                time.sleep(2 ** attempt)
+                continue
+            return None, "Không kết nối được Ollama. Hãy chắc chắn Ollama đang chạy (ollama serve)"
+        except requests.exceptions.Timeout:
+            if attempt < MAX_RETRIES - 1:
+                time.sleep(2 ** attempt)
+                continue
+            return None, "Ollama timeout. Hãy thử lại."
+        except json.JSONDecodeError:
             return {"tom_tat_ngan": result_text.strip()}, None
+        except Exception as e:
+            return None, str(e)
 
-    except requests.exceptions.ConnectionError:
-        return None, "Không kết nối được Ollama. Hãy chắc chắn Ollama đang chạy (ollama serve)"
-    except json.JSONDecodeError:
-        return {"tom_tat_ngan": result_text.strip()}, None
-    except Exception as e:
-        return None, str(e)
+    return None, "Đã thử lại 3 lần nhưng không thành công"
+
 
 def main():
     if len(sys.argv) < 2:
@@ -121,7 +154,6 @@ def main():
         print(json.dumps({"error": "File trống hoặc không đọc được nội dung"}))
         sys.exit(1)
 
-    # Trả về cả text gốc để hiển thị trên UI
     word_count = len(text.split())
     char_count = len(text)
 
@@ -139,6 +171,7 @@ def main():
             "preview_text": text[:800]
         }
     }))
+
 
 if __name__ == "__main__":
     main()

@@ -110,7 +110,7 @@ export default function UploadPage() {
                }}></div>
              </div>
              <p style={{marginTop:'12px', color:'var(--text-muted)', fontSize:'14px'}}>
-               {fileType === 'doc' ? 'AI Qwen2.5 đang đọc nội dung, có thể mất 30-60 giây...' : 'Đang chạy mô hình YOLOv8 để tìm vị trí con dấu đỏ'}
+               {fileType === 'doc' ? 'AI Qwen2.5:7b đang phân tích nội dung, có thể mất 30-60 giây...' : 'Đang chạy YOLOv8 + Qwen2.5:7b trích xuất thông tin'}
              </p>
           </div>
         ) : (

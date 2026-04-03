@@ -6,23 +6,34 @@ const path = require('path');
 const fs = require('fs');
 
 const app = express();
-app.use(cors());
-app.use(express.json());
+
+// Security: Restrict CORS to localhost only
+app.use(cors({
+  origin: ['http://localhost:3000', 'http://localhost:5173'],
+  methods: ['GET', 'POST'],
+}));
+
+app.use(express.json({ limit: '20mb' }));
 
 // Setup thư mục lưu file tạm
 const uploadDir = path.join(__dirname, 'uploads');
 if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir);
 
-// ĐẶC BIỆT: Phục vụ thư mục uploads như file tĩnh
+// Phục vụ thư mục uploads như file tĩnh
 app.use('/uploads', express.static(uploadDir));
 
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, uploadDir),
   filename: (req, file, cb) => cb(null, Date.now() + '-' + file.originalname)
 });
-const upload = multer({ storage });
 
-// API để Upload file
+// File size limit: 20MB
+const upload = multer({
+  storage,
+  limits: { fileSize: 20 * 1024 * 1024 }
+});
+
+// API để Upload file + detect stamps
 app.post('/api/process', upload.single('document'), (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
 
@@ -49,9 +60,9 @@ app.post('/api/process', upload.single('document'), (req, res) => {
         cleanOut = cleanOut.substring(firstBrace, lastBrace + 1);
       }
       const result = JSON.parse(cleanOut);
-      
+
       const baseUrl = process.env.RENDER_EXTERNAL_URL || `${req.protocol}://${req.get('host')}`;
-      
+
       const processedPages = (result.pages || []).map(page => {
         return {
           img_w: page.img_w,
@@ -65,11 +76,12 @@ app.post('/api/process', upload.single('document'), (req, res) => {
       res.json({
         success: true,
         pages: processedPages,
-        confidence_avg: result.confidence_avg
+        confidence_avg: result.confidence_avg,
+        summary: result.summary || null
       });
-      
+
     } catch (e) {
-      console.error(e, pythonOut);
+      console.error('Parse error:', e.message);
       res.status(500).json({ error: 'Failed to process document with AI' });
     }
   });
@@ -101,14 +113,18 @@ app.post('/api/summarize', upload.single('document'), (req, res) => {
       if (result.error) return res.status(500).json({ error: result.error });
       res.json(result);
     } catch (e) {
-      console.error(e, pythonOut);
+      console.error('Parse error:', e.message);
       res.status(500).json({ error: 'Lỗi khi phân tích kết quả từ AI' });
     }
   });
 });
 
-const PORT = 5000;
-app.listen(PORT, () => {
-  console.log(`🚀 Backend đang chạy ở port ${PORT}`);
+// Health check
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'healthy', version: '2.0.0' });
 });
 
+const PORT = process.env.PORT || 5000;
+app.listen(PORT, () => {
+  console.log(`🚀 VietIDP Backend v2.0 đang chạy ở port ${PORT}`);
+});

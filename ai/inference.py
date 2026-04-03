@@ -1,14 +1,14 @@
 import cv2
 import os
-import io
+import numpy as np
 from ultralytics import YOLO
 
-# Khởi tạo model bằng file trọng số vừa train xong
-# (Dùng file .pt tốt nhất sau khi train)
-MODEL_PATH = r"c:\Users\LAPTOP T&T\Desktop\AI_Science\ai\models\stamp_model\weights\best.pt"
+# Paths tương đối từ project root
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+MODEL_PATH = os.path.join(BASE_DIR, "ai", "models", "stamp_model", "weights", "best.pt")
 
-# Load model (chỉ load 1 lần khi server start)
 model = None
+
 
 def init_model():
     global model
@@ -19,14 +19,15 @@ def init_model():
         except Exception as e:
             print(f"❌ Error loading model: {e}")
 
+
 def detect_stamps_on_image(image_bytes):
     """
-    Nhận diện con dấu trên ảnh đầu vào, trả về danh sách bounding boxes
-    [ {'x':10,'y':10,'w':50,'h':50, 'conf': 0.95}, ... ]
+    Nhận diện con dấu trên ảnh đầu vào, trả về danh sách bounding boxes.
+    [ {'x_center':10,'y_center':10,'width':50,'height':50, 'confidence': 0.95}, ... ]
     """
     if model is None:
         init_model()
-        
+
     if model is None:
         return []
 
@@ -37,15 +38,12 @@ def detect_stamps_on_image(image_bytes):
     if img is None:
         return []
 
-    # Dự đoán bằng YOLO
     results = model.predict(source=img, conf=0.5, save=False)
-    
+
     stamps = []
-    # Kết quả trả về cho bản đầu tiên
     for r in results:
         boxes = r.boxes
         for box in boxes:
-            # Tọa độ xywh
             x, y, w, h = box.xywh[0].tolist()
             conf = float(box.conf[0])
             stamps.append({
@@ -55,5 +53,5 @@ def detect_stamps_on_image(image_bytes):
                 "height": h,
                 "confidence": round(conf * 100, 2)
             })
-            
+
     return stamps

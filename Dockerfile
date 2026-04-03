@@ -3,7 +3,7 @@ FROM nikolaik/python-nodejs:python3.10-nodejs20
 
 WORKDIR /app
 
-# Install system dependencies required for OpenCV
+# Install system dependencies required for OpenCV + PaddleOCR
 RUN apt-get update && apt-get install -y \
     libgl1 \
     libglib2.0-0 \
@@ -14,11 +14,18 @@ COPY backend/package*.json ./backend/
 RUN cd backend && npm install
 
 # Install Python requirements
-RUN pip install --no-cache-dir ultralytics opencv-python-headless pymupdf numpy
+COPY requirements.txt ./
+RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application code
 COPY ai/ ./ai/
+COPY src/ ./src/
 COPY backend/ ./backend/
+COPY setup.py ./
+COPY .env.example ./.env
+
+# Install src as package
+RUN pip install -e .
 
 # Expose backend API port
 EXPOSE 5000
